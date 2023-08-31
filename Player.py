@@ -1,4 +1,5 @@
 from Alive_Entity import *
+import math
 
 class Sword:
     def __init__(self):
@@ -6,13 +7,16 @@ class Sword:
         self.width = 40
         self.height = 10
         self.offset = 10
-        self.rect = pygame.Rect(0,0,0,0) # default rect
+        self.rect = None # default rect
+    
+    def reset_sword(self):
+        self.rect = None
 
     def draw(self, hit_box, facing_dir, prev_facing_dir): 
         # the hit box can be either the player or enemies' hitbox
         #print("Drawing sword")
         center_x, center_y = hit_box.center
-        hor_offset = hit_box.width / 2
+        hor_offset = hit_box.width / 3#2
         vert_offset = hit_box.height/2
 
         if facing_dir == Direction.UP or (facing_dir == Direction.NOT_MOVING and prev_facing_dir == Direction.UP):
@@ -39,62 +43,120 @@ class Sword:
 
 class Player(Alive_Entity):
     def __init__(self):
-        super().__init__("Link", 5 , 0, 5, [WIDTH/2,HEIGHT/2])
+        # player specific input
+        self.e_pressed = False
+
+        # sounds
+        self.player_hurt_sound = pygame.mixer.Sound("./sounds/player_hurt.mp3")
+
         # name, health, attack, movement_speed, coord
         self.idle_sprite = pygame.image.load("./sprites/knight_sprites/tile024.png")
-        self.cur_sprite = pygame.image.load("./sprites/knight_sprites/tile024.png")
-        self.scale_factor = 3
-        self.hitbox = pygame.Rect(0,0,20,20) # a default starting rect
+        self.right_sprite = pygame.image.load("./sprites/knight_sprites/tile024.png")
+        self.right_sprite_red = pygame.image.load("./sprites/knight_sprites/player_right_damage.png")
+        self.has_damaged_sprite = False
+        self.damage_sprite_timer_max = IFRAME_TIME
+        self.damage_sprite_timer = self.damage_sprite_timer_max
 
         # for sword
         self.sword = Sword()
+        self.attack_timer_max = IFRAME_TIME
+        self.attack_timer = copy(self.attack_timer_max)
         self.is_attacking = False
+
+        # keys
+        self.keys = 0
+
+        # gold
+        self.gold = 0
+
+        self.respawn_room_coord = [0,0]
+
+        scale_factor = 3
+        sprite = Sprite(scale_factor, 
+                        self.right_sprite, 
+                        8, # i
+                        8, # j
+                        [WIDTH/2,HEIGHT/2], # start coord
+                        True, # using i and j
+                        .5, # hor mult
+                        .5) # vert mult
+        
+        super().__init__(
+            "Link", # name
+            50 , # health
+            0, # attack
+            5, # movement speed
+            50, # knockback const
+            sprite) 
 
     def update_sprite(self):
         #if self.moving_dir == Direction.DOWN:
-        self.cur_sprite = self.idle_sprite
+        #self.cur_sprite = self.idle_sprite
+        #self.sprite.set_new_sprite(self.idle_sprite)
+       
+        if self.has_damaged_sprite:
+            print("Decreasing")
+            self.damage_sprite_timer -= 1
+        if self.damage_sprite_timer <= 0:
+            self.damage_sprite_timer = self.damage_sprite_timer_max
+            self.sprite.set_new_sprite(self.idle_sprite)
+            self.has_damaged_sprite = False
 
     def attacking(self):
-        if self.is_attacking:
-            self.sword.draw(self.hitbox, self.moving_dir, self.prev_moving_dir)
-            
+        # if the player is not pressing Enter then reset the attack_timer
+        if not self.is_attacking:
+            self.attack_timer = self.attack_timer_max
+            self.sword.reset_sword()
+        if self.attack_timer <= 0:
+            self.sword.reset_sword()
+
+        # if the player is pressing Enter and the timer is not 0, draw the sword
+        if self.is_attacking and self.attack_timer > 0:
+            #print("Drawing the sword")
+            self.sword.draw(self.sprite.hitbox, self.moving_dir, self.prev_moving_dir)
+            self.attack_timer -= 1
+        #(self.attack_timer)
+
+    def damage(self, amt):
+        super().damage(amt)
+        self.sprite.set_new_sprite(self.right_sprite_red)
+        self.has_damaged_sprite = True
+
+        # add some knockback to the player
+        self.apply_knockback()
+
+        # play the damage sound
+        self.player_hurt_sound.play()
+
+        
+
+    def has_keys(self):
+        return self.keys > 0
+    
     def draw(self):
         self.update_sprite()
-
-        self.cur_sprite = pygame.transform.scale(self.cur_sprite, (self.cur_sprite.get_width() * self.scale_factor,
-                                                      self.cur_sprite.get_height() * self.scale_factor))
-        screen.blit(self.cur_sprite, self.coord)
-        #print(cur_sprite.get_width(), cur_sprite.get_height())
-        # Assuming you have a character object with x, y, width, and height properties
-        self.draw_hitbox()
-        #self.draw_center()
+        self.sprite.draw()
         self.attacking()
-        #hor_mult = .5
-        #vert_mult = .6
-        #self.hitbox = pygame.Rect(self.coord[0] + cur_sprite.get_width()/4, self.coord[1] + cur_sprite.get_height()/4, hor_mult*cur_sprite.get_width(), vert_mult*cur_sprite.get_height())
-        #hitbox = pygame.Rect(self.coord[0] , self.coord[1] , .75*cur_sprite.get_width(), .75*cur_sprite.get_height())
-        
-        #pygame.draw.rect(screen, white, self.hitbox, 2)  # Red rectangle with 2-pixel width
     
-    def draw_center(self):
-        pygame.draw.circle(screen, red, self.hitbox.center, 3)
-        
-    def draw_hitbox(self):
-        hor_mult = .5
-        vert_mult = .6
-        self.hitbox = pygame.Rect(self.coord[0] + self.cur_sprite.get_width()/4, self.coord[1] + self.cur_sprite.get_height()/4, hor_mult*self.cur_sprite.get_width(), vert_mult*self.cur_sprite.get_height())
-        
-        if DRAW_HIT_BOXES:
-            pygame.draw.rect(screen, white, self.hitbox, 2)
-
     def spawn_at_south_door(self):
-        self.coord = get_top_left_coord(NUM_TILES_WIDE//2 - .25, NUM_TILES_TALL-3.5)
+        self.sprite.set_sprite_coord(get_top_left_coord(NUM_TILES_WIDE//2 - .25, NUM_TILES_TALL-3.5))
+        self.respawn_room_coord = copy(self.sprite.coord)
+
     def spawn_at_north_door(self):
-        self.coord = get_top_left_coord(NUM_TILES_WIDE//2 - .25, 1.7)
+        self.sprite.set_sprite_coord(get_top_left_coord(NUM_TILES_WIDE//2 - .25, 1.7))
+        self.respawn_room_coord = copy(self.sprite.coord)
+
     def spawn_at_west_door(self):
-        self.coord = get_top_left_coord(2, NUM_TILES_TALL/2 - 1)
+        self.sprite.set_sprite_coord(get_top_left_coord(2, NUM_TILES_TALL/2 - 1))
+        self.respawn_room_coord = copy(self.sprite.coord)
+
     def spawn_at_east_door(self):
-        self.coord = get_top_left_coord(NUM_TILES_WIDE-3.5, NUM_TILES_TALL/2 - 1)
+        self.sprite.set_sprite_coord(get_top_left_coord(NUM_TILES_WIDE-3.5, NUM_TILES_TALL/2 - 1))
+        self.respawn_room_coord = copy(self.sprite.coord)
+
+    def spawn_at_respawn_room_coord(self):
+        print(self.respawn_room_coord)
+        self.sprite.set_sprite_coord(copy(self.respawn_room_coord))
 '''
 #screen.blit(decor_spritesheet, (WIDTH/2, HEIGHT/2))
 SPRITE_WIDTH = 24

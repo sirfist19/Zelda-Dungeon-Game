@@ -11,8 +11,6 @@ TILE_WIDTH = 60
 
 So the grid is 17 by 13
 '''
-
-
 class Tilemap:
     def __init__(self, cur_room_tiles):
         #self.room_builder = RoomBuilder()
@@ -21,6 +19,8 @@ class Tilemap:
     
     def set_new_cur_room_tiles(self, new_cur_room_tiles):
         self.cur_room_tiles = new_cur_room_tiles
+        self.display_cur_room()
+                            
 
     def draw_tile(self, color, i, j): # i and j are the col and row respectively
         pygame.draw.rect(

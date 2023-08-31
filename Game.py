@@ -1,8 +1,9 @@
-from Skeleton import *
+from Enemy import *
 from Player import *
 from Tilemap import Tilemap
 from Map import Map
 from Tiles import *
+from Items import *
 
 class UI:
     def __init__(self, player):
@@ -11,6 +12,8 @@ class UI:
         self.player = player
         self.name_text = "Name: " 
         self.health_text = "Health: " 
+        self.key_text = "Keys: "
+        self.gold_text = "Gold: "
         self.offset = 20
         self.seperation_text = "     "
         self.game_over_text = "GAME OVER!"
@@ -18,7 +21,11 @@ class UI:
     def get_ui_text(self):
         name_section = self.name_text + self.player.name
         health_section = self.health_text + str(self.player.health) + "/" + str(self.player.max_health)
-        return name_section + self.seperation_text + health_section 
+        key_section = self.key_text + str(self.player.keys)
+        gold_section = self.gold_text + str(self.player.gold)
+        ui_list = [name_section, health_section, key_section, gold_section]
+        ui_list = [section + self.seperation_text for section in ui_list]
+        return ''.join(ui_list)
     
     def draw_game_over_screen(self):
         game_over_ui_surf = self.game_over_font.render(self.game_over_text, True, red)  # Text, antialiasing, color
@@ -36,7 +43,7 @@ class Game:
         self.player = Player()
         self.ui = UI(self.player)
         self.game_over = False
-        self.map = Map()
+        self.map = Map(CURRENT_LEVEL) 
         self.tilemap = Tilemap(self.map.cur_room.tiles)
 
     def get_input(self):
@@ -60,6 +67,11 @@ class Game:
                 self.player.is_attacking = True   
             else:
                 self.player.is_attacking = False
+
+            if keys[pygame.K_e]:
+                self.player.e_pressed = True
+            else:
+                self.player.e_pressed = False
     
     def event_loop(self):
         # pygame.event is a list of events to sort through each frame
@@ -70,6 +82,16 @@ class Game:
         
         self.is_alive_check() # removes any dead enemies or the player
         self.collision_check()
+        self.decrease_iFrames()
+        self.item_actions()
+    
+    def decrease_iFrames(self):
+        # decrease iFrames for all entities (player and enemies in cur room)
+        #print(self.map.cur_room.enemies)
+        for enemy in self.map.cur_room.enemies:
+            enemy.decrease_iFrames()
+        if self.player:
+            self.player.decrease_iFrames()
 
     def is_alive_check(self):
         self.map.cur_room.enemy_alive_check()
@@ -79,56 +101,127 @@ class Game:
             self.game_over = True
             self.player = None
 
-    def collision_check(self):
+    def player_enemy_collisions(self):
         # Player vs enemy collisions
         for enemy in self.map.cur_room.enemies:
             if self.player:
-                if self.player.hitbox.colliderect(enemy.hitbox):
+                if self.player.sprite.hitbox.colliderect(enemy.sprite.hitbox):
                     self.player.damage(enemy.attack)
                     enemy.damage(self.player.attack)
                     
-                if self.player.sword.rect.colliderect(enemy.hitbox):
+                if self.player.sword.rect and self.player.sword.rect.colliderect(enemy.sprite.hitbox):
                     print("Sword collided with the enemy")
                     enemy.damage(self.player.sword.attack)
+                    #print(f"enemy iFrames:{enemy.iFrame_timer}")
+                    print("Enemy health: ", enemy.health)
+                    #print(f"Player attack timer: {self.player.attack_timer}")
             #print(f"enemy: {enemy.health}")
 
-        # Check for tilemap collisions like walls, pits, doors etc.
+    def item_collisions(self):
+        # Check for item collisions
+        for item in self.map.cur_room.items:
+            if self.player:
+                if self.player.sprite.hitbox.colliderect(item.sprite.hitbox):
+                    print("collided with item")
+                    if isinstance(item, Key):
+                        self.player.keys += 1
+                        self.map.cur_room.items.remove(item)
+                    elif isinstance(item, Gold):
+                        self.player.gold += 1
+                        self.map.cur_room.items.remove(item)
+                    elif isinstance(item, Heart):
+                        healed = self.player.heal(item.heal_amt)
+                        if healed: # only remove the heart if it actually healed 
+                            self.map.cur_room.items.remove(item)
+                    elif isinstance(item, Chest):
+                        self.wall_behavior(item, self.player, item.i, item.j)
+    
+    def item_actions(self):
+        for item in self.map.cur_room.items:
+            if self.player:
+                if isinstance(item, Chest):
+                    contained_item = item.open(self.player) # tries to open the chest if conditions are correct
+                    if contained_item:
+                        self.map.cur_room.add_item(contained_item)
+
+    def tile_collisions(self):
+         # Check for tilemap collisions like walls, pits, doors etc.
         for i in range(len(self.tilemap.cur_room_tiles)):
             for j in range(len(self.tilemap.cur_room_tiles[0])):
                 tile = self.tilemap.cur_room_tiles[i][j]
-                if type(tile) == Wall:
-                    if self.player and self.player.hitbox.colliderect(tile.get_rect(j,i)):
-                        player_center = self.player.hitbox.center
-                        wall_center = tile.get_rect(j,i).center
-                        self.player.wall_bounce(player_center, wall_center)
+                self.wall_collisions(tile, i, j)
+                self.door_collisions(tile, i, j)
+                self.pit_collisions(tile, i, j)
 
-                    for enemy in self.map.cur_room.enemies:
-                        if enemy.hitbox.colliderect(tile.get_rect(j,i)):
-                            enemy_center = enemy.hitbox.center
-                            wall_center = tile.get_rect(j,i).center
-                            enemy.wall_bounce(enemy_center, wall_center)
-                if type(tile) == UpDoor:
-                    if self.player and self.player.hitbox.colliderect(tile.get_rect(j,i)):
-                        self.map.cur_room = self.map.cur_room.get_north_room()
-                        self.tilemap.set_new_cur_room_tiles(self.map.cur_room.tiles)
-                        print("Went up a room")
-                        self.player.spawn_at_south_door()
-                if type(tile) == DownDoor:
-                    if self.player and self.player.hitbox.colliderect(tile.get_rect(j,i)):
-                        self.map.cur_room = self.map.cur_room.get_south_room()
-                        self.tilemap.set_new_cur_room_tiles(self.map.cur_room.tiles)
-                        self.player.spawn_at_north_door()
-                if type(tile) == LeftDoor:
-                    if self.player and self.player.hitbox.colliderect(tile.get_rect(j,i)):
-                        self.map.cur_room = self.map.cur_room.get_west_room()
-                        self.tilemap.set_new_cur_room_tiles(self.map.cur_room.tiles)
-                        self.player.spawn_at_east_door()
-                if type(tile) == RightDoor:
-                    if self.player and self.player.hitbox.colliderect(tile.get_rect(j,i)):
-                        self.map.cur_room = self.map.cur_room.get_east_room()
-                        self.tilemap.set_new_cur_room_tiles(self.map.cur_room.tiles)
-                        self.player.spawn_at_west_door()
-        #print(self.map, self.map.cur_room)
+    def collision_check(self):
+        self.player_enemy_collisions()
+        self.item_collisions()
+        self.tile_collisions()
+
+    # tile can be a tile or an item
+    def wall_behavior(self, tile, colliding_entity, i, j):
+        colliding_entity_center = colliding_entity.sprite.hitbox.center
+
+        if isinstance(tile, Tile):
+            wall_center = tile.get_rect(j,i).center
+        elif isinstance(tile, Item):
+            wall_center = tile.sprite.get_sprite_center()
+        
+        if not wall_center:
+            print("Wall center is null")
+        colliding_entity.wall_bounce(colliding_entity_center, wall_center)
+    
+    def wall_collisions(self, tile, i, j):
+        if type(tile) == Wall or type(tile) == Pillar:
+            if self.player and self.player.sprite.hitbox.colliderect(tile.get_rect(j,i)):
+                self.wall_behavior(tile, self.player, i, j)
+
+            for enemy in self.map.cur_room.enemies:
+                if enemy and enemy.sprite.hitbox.colliderect(tile.get_rect(j,i)):
+                    self.wall_behavior(tile, enemy, i, j)
+                    enemy.move_in_random_dir()
+
+    def pit_collisions(self, tile, i, j):
+        if type(tile) == Pit:
+            if self.player and self.player.sprite.hitbox.colliderect(tile.get_rect(j,i)):
+                #self.wall_behavior(tile, self.player, i, j)
+                self.player.damage(1)
+                self.player.spawn_at_respawn_room_coord()
+
+            for enemy in self.map.cur_room.enemies:
+                if enemy.sprite.hitbox.colliderect(tile.get_rect(j,i)):
+                    #self.wall_behavior(tile, enemy, i, j)
+                    pass
+
+    def door_collisions(self, tile, i, j):
+        if self.player and self.player.sprite.hitbox.colliderect(tile.get_rect(j,i)): # if collided with tile
+            if type(tile) == Door or (type(tile) == LockedDoor and not tile.locked):
+                door = tile
+                if door.direction == Direction.UP:
+                    self.map.cur_room = self.map.cur_room.get_north_room()
+                    print("Went up a room")
+                    self.player.spawn_at_south_door()
+                elif door.direction == Direction.DOWN:
+                    self.map.cur_room = self.map.cur_room.get_south_room() 
+                    self.player.spawn_at_north_door()
+                elif door.direction == Direction.LEFT:
+                    self.map.cur_room = self.map.cur_room.get_west_room()        
+                    self.player.spawn_at_east_door()
+                elif door.direction == Direction.RIGHT:
+                    self.map.cur_room = self.map.cur_room.get_east_room()
+                    self.player.spawn_at_west_door()
+                
+                # draw the new room
+                self.tilemap.set_new_cur_room_tiles(self.map.cur_room.tiles)
+            elif type(tile) == LockedDoor and tile.locked:
+                locked_door = tile
+                print("The door is locked")
+                if self.player.has_keys():
+                    self.player.keys -= 1
+                    self.map.cur_room.unlock_door(locked_door)
+                    print("Unlocked the door")
+                else:
+                    self.wall_behavior(locked_door, self.player, i, j)
 
     def draw(self):
         screen.fill(self.bg_color)
@@ -136,14 +229,17 @@ class Game:
         
         for enemy in self.map.cur_room.enemies:
             enemy.draw()
+        for item in self.map.cur_room.items:
+            item.draw()
+
         if self.player:
             self.player.draw()
         self.ui.draw()
 
         if self.game_over:
             self.ui.draw_game_over_screen()
-        #draw_point(4,4)
-
+        #draw_point(8,8)
+        
     def move(self):
         if self.player:
             self.player.move()
@@ -151,6 +247,7 @@ class Game:
         for enemy in self.map.cur_room.enemies:
             enemy.move()
             #print(enemy.moving_dir)
-            enemy.patrol()
+            if isinstance(enemy, Skeleton):
+                enemy.patrol()
     
     

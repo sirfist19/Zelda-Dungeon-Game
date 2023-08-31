@@ -3,18 +3,6 @@ ZELDA 2D DUNGEON GAME
 This is intended to be a Zelda top down dungeon crawler
 Hopefully will have puzzles and chests and enemies and a boss.
 
-To do:
-Movement
-Import tiles
-Add in walls
-Add in health
-Add in UI for the health
-Add an inventory
-Add in simple enemies
-Add in a sword that you can hit enemies with
-Add in chests
-Add in items
-
 '''
 
 from Game import *

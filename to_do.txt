@@ -1,0 +1,40 @@
+To do
+- Add in sounds and music
+    - Add general dungeon music
+    - Add in pickup object sounds
+    - Add in damage sounds (for enemies)
+    - 
+- Add in heart containers
+- Add in a red version of the sprite when you or enemies get hit (for enemies)
+- Add an inventory
+- Add in items
+    - a heart container
+- Add tiles 
+
+- Add in doors that lock when entering the room and open when all enemies are killed
+- Give the sword a sprite
+- Give the player more sprites 
+
+
+- Add in more enemies
+    - a bat
+    - slimes
+    - other types of skeletons
+- Add in movable blocks and buttons for puzzles
+- better enemy AI
+    - pathfinding
+    - better random movement
+- Add in puzzles
+    - Link to the Past style with buttons that change the room layout
+    - original zelda style with new items that allow passing through the dungeon
+
+Completed!
+- Add in enemy drops DONE
+- add in gold DONE
+- add in healing hearts DONE
+- Add in chests DONE
+- Add keys DONE
+    - Add keys to the UI DONE
+- Combine the 4 different directional doors into one door that has an orientation arg DONE
+- Add locked doors DONE
+- Add in a pit that damages you and sends you to the beginning of the room DONE

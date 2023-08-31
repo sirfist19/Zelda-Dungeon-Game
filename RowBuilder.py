@@ -14,20 +14,6 @@ class RowBuilder:
         wall_top_row.append(Background())
         return wall_top_row
 
-    def get_wall_with_door_row(self, up_door):
-        wall_top_row = []
-        wall_top_row.append(Background())
-        for i in range(1, NUM_TILES_WIDE-1):
-            if i == 8:
-                if up_door:
-                    wall_top_row.append(UpDoor())
-                else:
-                    wall_top_row.append(DownDoor())
-            else:
-                wall_top_row.append(Wall())
-        wall_top_row.append(Background())
-        return wall_top_row
-
     def get_floor_row(self, is_odd):
         floor_row = []
         floor_row.append(Background())
@@ -41,14 +27,14 @@ class RowBuilder:
     def add_odd_floor_tile(self, floor_row, i, is_odd):
         if is_odd:
             if i%2 == 1:
-                floor_row.append(Floor(light_blue))
+                floor_row.append(Floor())
             else:
-                floor_row.append(Floor(blue))
+                floor_row.append(Floor())
         else:
             if i%2 == 0:
-                floor_row.append(Floor(light_blue))
+                floor_row.append(Floor())
             else:
-                floor_row.append(Floor(blue))
+                floor_row.append(Floor())
 
     def get_pillar_row(self, is_odd):
         # BWFFFWFFFFFWFFFWB
